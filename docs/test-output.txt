@@ -1,0 +1,84 @@
+?   	github.com/MarcosProchnow/sqlguard-mcp/cmd/demo	[no test files]
+?   	github.com/MarcosProchnow/sqlguard-mcp/cmd/sqlguard-mcp	[no test files]
+=== RUN   TestCheck
+=== RUN   TestCheck/select_simples
+=== RUN   TestCheck/select_com_ponto_e_vírgula_final
+=== RUN   TestCheck/with_cte
+=== RUN   TestCheck/minúsculas
+=== RUN   TestCheck/palavra_proibida_só_dentro_de_texto
+=== RUN   TestCheck/palavra_proibida_em_identificador_entre_aspas
+=== RUN   TestCheck/escape_de_aspa_em_texto
+=== RUN   TestCheck/comentário_removido_do_que_vai_ao_banco
+=== RUN   TestCheck/replace_é_função,_não_comando
+=== RUN   TestCheck/drop
+=== RUN   TestCheck/delete
+=== RUN   TestCheck/duas_instruções
+=== RUN   TestCheck/cte_que_escreve
+=== RUN   TestCheck/select_into_cria_tabela
+=== RUN   TestCheck/for_update_trava_linhas
+=== RUN   TestCheck/explain_analyze_executa
+=== RUN   TestCheck/comando_escondido_atrás_de_comentário
+=== RUN   TestCheck/comentário_não_esconde_a_segunda_instrução
+=== RUN   TestCheck/função_que_dorme
+=== RUN   TestCheck/função_que_lê_arquivo
+=== RUN   TestCheck/altera_configuração
+=== RUN   TestCheck/texto_com_$_não_esconde_nada
+=== RUN   TestCheck/vazia
+=== RUN   TestCheck/só_comentário
+=== RUN   TestCheck/aspa_aberta
+=== RUN   TestCheck/comentário_aberto
+=== RUN   TestCheck/pragma
+=== RUN   TestCheck/transação
+--- PASS: TestCheck (0.02s)
+    --- PASS: TestCheck/select_simples (0.00s)
+    --- PASS: TestCheck/select_com_ponto_e_vírgula_final (0.00s)
+    --- PASS: TestCheck/with_cte (0.00s)
+    --- PASS: TestCheck/minúsculas (0.00s)
+    --- PASS: TestCheck/palavra_proibida_só_dentro_de_texto (0.00s)
+    --- PASS: TestCheck/palavra_proibida_em_identificador_entre_aspas (0.00s)
+    --- PASS: TestCheck/escape_de_aspa_em_texto (0.00s)
+    --- PASS: TestCheck/comentário_removido_do_que_vai_ao_banco (0.00s)
+    --- PASS: TestCheck/replace_é_função,_não_comando (0.00s)
+    --- PASS: TestCheck/drop (0.00s)
+    --- PASS: TestCheck/delete (0.00s)
+    --- PASS: TestCheck/duas_instruções (0.00s)
+    --- PASS: TestCheck/cte_que_escreve (0.00s)
+    --- PASS: TestCheck/select_into_cria_tabela (0.00s)
+    --- PASS: TestCheck/for_update_trava_linhas (0.00s)
+    --- PASS: TestCheck/explain_analyze_executa (0.00s)
+    --- PASS: TestCheck/comando_escondido_atrás_de_comentário (0.00s)
+    --- PASS: TestCheck/comentário_não_esconde_a_segunda_instrução (0.00s)
+    --- PASS: TestCheck/função_que_dorme (0.00s)
+    --- PASS: TestCheck/função_que_lê_arquivo (0.00s)
+    --- PASS: TestCheck/altera_configuração (0.00s)
+    --- PASS: TestCheck/texto_com_$_não_esconde_nada (0.00s)
+    --- PASS: TestCheck/vazia (0.00s)
+    --- PASS: TestCheck/só_comentário (0.00s)
+    --- PASS: TestCheck/aspa_aberta (0.00s)
+    --- PASS: TestCheck/comentário_aberto (0.00s)
+    --- PASS: TestCheck/pragma (0.00s)
+    --- PASS: TestCheck/transação (0.00s)
+=== RUN   TestCheckRemoveComentarioEPontoEVirgula
+--- PASS: TestCheckRemoveComentarioEPontoEVirgula (0.00s)
+=== RUN   TestCheckPreservaTexto
+--- PASS: TestCheckPreservaTexto (0.00s)
+PASS
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	1.035s
+=== RUN   TestInitializeEListaFerramentas
+--- PASS: TestInitializeEListaFerramentas (0.03s)
+=== RUN   TestQueryPermitidaEBloqueada
+--- PASS: TestQueryPermitidaEBloqueada (0.04s)
+=== RUN   TestListTablesEDescribe
+--- PASS: TestListTablesEDescribe (0.03s)
+=== RUN   TestMetodoDesconhecido
+--- PASS: TestMetodoDesconhecido (0.02s)
+PASS
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	1.142s
+=== RUN   TestTablesEDescribe
+--- PASS: TestTablesEDescribe (0.03s)
+=== RUN   TestQueryLimitaLinhas
+--- PASS: TestQueryLimitaLinhas (0.03s)
+=== RUN   TestBancoRecusaEscrita
+--- PASS: TestBancoRecusaEscrita (0.03s)
+PASS
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	1.108s

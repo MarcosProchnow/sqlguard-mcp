@@ -1,0 +1,32 @@
+== initialize: sqlguard-mcp 0.1.0
+== tools/list: list_tables, describe_table, query
+
+1. Quais tabelas existem?
+  [OK      ] {"columns":["tabela"],"rows":[["clientes"],["itens_pedido"],["pedidos"],["produtos"]],"row_count":4,"truncated":false}
+
+2. Como é a tabela pedidos?
+  [OK      ] {"columns":["coluna","tipo","obrigatoria","chave_primaria"],"rows":[["id","INTEGER",false,true],["cliente_id","INTEGER",true,false],["data","TEXT",true,false],["status","TEXT",true,false]],"row_count":4,"truncated":false}
+
+3. Quem mais gastou? (permitida)
+  [OK      ] {"columns":["nome","total"],"rows":[["Ana Souza",1926.6],["Carla Mendes",998],["Fábio Nunes",908.8]],"row_count":3,"truncated":false}
+
+4. Tentativa: apagar uma tabela (bloqueada)
+  [BLOQUEIO] consulta bloqueada: só SELECT e WITH são permitidos (recebido: DROP)
+
+5. Tentativa: duas instruções (bloqueada)
+  [BLOQUEIO] consulta bloqueada: apenas uma instrução por consulta
+
+6. Tentativa: escrever dentro de uma CTE (bloqueada)
+  [BLOQUEIO] consulta bloqueada: palavra proibida: DELETE
+
+7. Os dados continuam intactos?
+  [OK      ] {"columns":["pedidos"],"rows":[[12]],"row_count":1,"truncated":false}
+
+== Log de auditoria (tmp/audit.jsonl)
+  list_tables    permitida=true  linhas=4   <nil>
+  describe_table permitida=true  linhas=4   <nil>
+  query          permitida=true  linhas=3   <nil>
+  query          permitida=false linhas=0   só SELECT e WITH são permitidos (recebido: DROP)
+  query          permitida=false linhas=0   apenas uma instrução por consulta
+  query          permitida=false linhas=0   palavra proibida: DELETE
+  query          permitida=true  linhas=1   <nil>
