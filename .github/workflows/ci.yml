@@ -8,13 +8,34 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sqlguard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SQLGUARD_PG_DSN: postgres://postgres:postgres@localhost:5432/sqlguard?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test -race ./...
-      - run: go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp
-      - run: go run ./cmd/demo bin/sqlguard-mcp
+      - name: Formatação
+        run: test -z "$(gofmt -l .)"
+      - name: Análise estática
+        run: go vet ./...
+      - name: Testes (SQLite e PostgreSQL)
+        run: go test -race -v ./...
+      - name: Fuzzing do guard (30 s)
+        run: go test -run '^$' -fuzz FuzzCheck -fuzztime 30s ./internal/guard
+      - name: Demonstração ponta a ponta
+        run: |
+          go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp
+          go run ./cmd/demo bin/sqlguard-mcp

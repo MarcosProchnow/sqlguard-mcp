@@ -122,8 +122,12 @@ func mask(sql string) (scan, exec string, err error) {
 			e.WriteByte(' ')
 
 		case c == '\'':
-			backslash := i > 0 && (sql[i-1] == 'e' || sql[i-1] == 'E') && (i < 2 || !isWord(sql[i-2]))
-			j, ok := skipQuoted(sql, i, '\'', backslash)
+			// E'...' trata a barra invertida como escape no PostgreSQL e como texto comum no
+			// SQLite. Cada banco leria os limites do texto de um jeito, então não aceitamos.
+			if i > 0 && (sql[i-1] == 'e' || sql[i-1] == 'E') && (i < 2 || !isWord(sql[i-2])) {
+				return "", "", errors.New("texto com prefixo E (escape) não é suportado")
+			}
+			j, ok := skipQuoted(sql, i, '\'')
 			if !ok {
 				return "", "", errors.New("texto entre aspas não terminado")
 			}
@@ -132,7 +136,7 @@ func mask(sql string) (scan, exec string, err error) {
 			i = j
 
 		case c == '"' || c == '`':
-			j, ok := skipQuoted(sql, i, c, false)
+			j, ok := skipQuoted(sql, i, c)
 			if !ok {
 				return "", "", errors.New("identificador entre aspas não terminado")
 			}
@@ -141,21 +145,13 @@ func mask(sql string) (scan, exec string, err error) {
 			i = j
 
 		case c == '$' && (i == 0 || !isWord(sql[i-1])):
-			tag := dollarTag(sql[i:])
-			if tag == "" {
-				s.WriteByte(c)
-				e.WriteByte(c)
-				i++
-				continue
+			// $$...$$ só existe no PostgreSQL; em outros bancos o conteúdo seria código.
+			if dollarRe.MatchString(sql[i:]) {
+				return "", "", errors.New("texto entre $$ não é suportado")
 			}
-			end := strings.Index(sql[i+len(tag):], tag)
-			if end < 0 {
-				return "", "", errors.New("texto com $ não terminado")
-			}
-			j := i + len(tag) + end + len(tag)
-			e.WriteString(sql[i:j])
-			s.WriteString("''")
-			i = j
+			s.WriteByte(c)
+			e.WriteByte(c)
+			i++
 
 		default:
 			s.WriteByte(c)
@@ -168,26 +164,23 @@ func mask(sql string) (scan, exec string, err error) {
 
 var dollarRe = regexp.MustCompile(`^\$([A-Za-z_][A-Za-z0-9_]*)?\$`)
 
-func dollarTag(s string) string { return dollarRe.FindString(s) }
-
 func isWord(b byte) bool {
 	return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
 }
 
 // skipQuoted devolve o índice logo após o fechamento da aspa aberta em sql[i].
-func skipQuoted(sql string, i int, q byte, backslash bool) (int, bool) {
+// A aspa dobrada ('' ou "") é uma aspa literal; a barra invertida não é escape.
+func skipQuoted(sql string, i int, q byte) (int, bool) {
 	n := len(sql)
 	for j := i + 1; j < n; j++ {
-		switch {
-		case backslash && sql[j] == '\\':
-			j++
-		case sql[j] == q:
-			if j+1 < n && sql[j+1] == q {
-				j++
-				continue
-			}
-			return j + 1, true
+		if sql[j] != q {
+			continue
 		}
+		if j+1 < n && sql[j+1] == q {
+			j++
+			continue
+		}
+		return j + 1, true
 	}
 	return 0, false
 }

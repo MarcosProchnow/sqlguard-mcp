@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="330" viewBox="0 0 900 330" role="img" aria-label="Fluxo de uma consulta: Claude, servidor MCP, guard de SQL, conexão somente leitura e banco; consultas recusadas e o log de auditoria">
+<title>Fluxo de uma consulta no sqlguard-mcp</title>
+<defs>
+  <marker id="seta" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+  <marker id="setaV" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#B91C1C"/></marker>
+</defs>
+<rect width="900" height="330" rx="12" fill="#F8FAFC" stroke="#CBD5E1"/>
+<g font-family="Verdana,DejaVu Sans,Arial,sans-serif" font-size="13" text-anchor="middle">
+
+  <rect x="24" y="70" width="140" height="64" rx="8" fill="#D97757"/>
+  <text x="94" y="98" fill="#fff" font-weight="700">Claude Code</text>
+  <text x="94" y="118" fill="#fff" font-size="11">cliente MCP</text>
+
+  <rect x="214" y="70" width="150" height="64" rx="8" fill="#0F766E"/>
+  <text x="289" y="98" fill="#fff" font-weight="700">Servidor MCP</text>
+  <text x="289" y="118" fill="#fff" font-size="11">JSON-RPC sobre stdio</text>
+
+  <rect x="414" y="70" width="150" height="64" rx="8" fill="#1F4E79"/>
+  <text x="489" y="98" fill="#fff" font-weight="700">1. Guard de SQL</text>
+  <text x="489" y="118" fill="#fff" font-size="11">só SELECT, 1 instrução</text>
+
+  <rect x="614" y="70" width="150" height="64" rx="8" fill="#6B46C1"/>
+  <text x="689" y="98" fill="#fff" font-weight="700">2. Somente leitura</text>
+  <text x="689" y="118" fill="#fff" font-size="11">limite de linhas e tempo</text>
+
+  <rect x="800" y="70" width="80" height="64" rx="8" fill="#334155"/>
+  <text x="840" y="98" fill="#fff" font-weight="700">Banco</text>
+  <text x="840" y="118" fill="#fff" font-size="10">SQLite ou</text>
+  <text x="840" y="131" fill="#fff" font-size="10">PostgreSQL</text>
+
+  <line x1="164" y1="102" x2="212" y2="102" stroke="#475569" stroke-width="2" marker-end="url(#seta)"/>
+  <line x1="364" y1="102" x2="412" y2="102" stroke="#475569" stroke-width="2" marker-end="url(#seta)"/>
+  <line x1="564" y1="102" x2="612" y2="102" stroke="#475569" stroke-width="2" marker-end="url(#seta)"/>
+  <line x1="764" y1="102" x2="798" y2="102" stroke="#475569" stroke-width="2" marker-end="url(#seta)"/>
+
+  <path d="M489,134 L489,200" stroke="#B91C1C" stroke-width="2" fill="none" marker-end="url(#setaV)"/>
+  <rect x="379" y="204" width="220" height="44" rx="8" fill="#FEE2E2" stroke="#B91C1C"/>
+  <text x="489" y="223" fill="#7F1D1D" font-weight="700">Recusada, com o motivo</text>
+  <text x="489" y="239" fill="#7F1D1D" font-size="11">DROP, DELETE, INTO, 2 instruções...</text>
+
+  <path d="M689,134 L689,200" stroke="#B91C1C" stroke-width="2" fill="none" marker-end="url(#setaV)"/>
+  <rect x="599" y="204" width="180" height="44" rx="8" fill="#FEE2E2" stroke="#B91C1C"/>
+  <text x="689" y="223" fill="#7F1D1D" font-weight="700">Banco recusa escrita</text>
+  <text x="689" y="239" fill="#7F1D1D" font-size="11">mesmo se o guard falhar</text>
+
+  <rect x="24" y="270" width="852" height="40" rx="8" fill="#E2E8F0" stroke="#94A3B8"/>
+  <text x="450" y="294" fill="#1E293B">Toda chamada, permitida ou não, vira uma linha no log de auditoria (JSON): ferramenta, SQL, motivo, linhas, duração</text>
+
+  <text x="94" y="40" fill="#475569" font-size="12" font-weight="700">O que o Claude pede</text>
+  <text x="689" y="40" fill="#475569" font-size="12" font-weight="700">Duas barreiras independentes</text>
+</g>
+</svg>

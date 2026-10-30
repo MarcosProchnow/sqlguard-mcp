@@ -10,6 +10,11 @@ import (
 
 func openDemo(t *testing.T) *Store {
 	t.Helper()
+	return openDemoTimeout(t, 5*time.Second)
+}
+
+func openDemoTimeout(t *testing.T, timeout time.Duration) *Store {
+	t.Helper()
 	script, err := os.ReadFile(filepath.Join("..", "..", "testdata", "loja.sql"))
 	if err != nil {
 		t.Fatal(err)
@@ -18,7 +23,7 @@ func openDemo(t *testing.T) *Store {
 	if err := SeedSQLite(path, string(script)); err != nil {
 		t.Fatal(err)
 	}
-	st, err := Open("sqlite:"+path, 5*time.Second)
+	st, err := Open("sqlite:"+path, timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,5 +86,19 @@ func TestBancoRecusaEscrita(t *testing.T) {
 	res, err := st.Query(context.Background(), "SELECT COUNT(*) FROM clientes", 1)
 	if err != nil || res.Rows[0][0] != int64(6) {
 		t.Errorf("dados deveriam estar intactos: %v %v", res, err)
+	}
+}
+
+// Uma consulta que nunca termina precisa ser interrompida pelo tempo máximo.
+func TestQueryTimeout(t *testing.T) {
+	st := openDemoTimeout(t, 300*time.Millisecond)
+	start := time.Now()
+	_, err := st.Query(context.Background(),
+		"WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r) SELECT COUNT(*) FROM r", 10)
+	if err == nil {
+		t.Fatal("esperava erro de tempo esgotado")
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("levou %v para interromper", d)
 	}
 }

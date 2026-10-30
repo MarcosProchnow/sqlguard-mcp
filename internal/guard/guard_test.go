@@ -34,7 +34,11 @@ func TestCheck(t *testing.T) {
 		{"função que dorme", "SELECT pg_sleep(30)", false, "pg_sleep"},
 		{"função que lê arquivo", "SELECT pg_read_file('/etc/passwd')", false, "pg_read_file"},
 		{"altera configuração", "SELECT set_config('x', 'y', false)", false, "set_config"},
-		{"texto com $ não esconde nada", "SELECT $$;$$; DROP TABLE t", false, "uma instrução"},
+		{"texto entre $$ não é aceito", "SELECT $$;$$; DROP TABLE t", false, "não é suportado"},
+		{"texto com tag $x$ não é aceito", "SELECT $x$a$x$", false, "não é suportado"},
+		{"string E esconderia a segunda instrução", `SELECT E'\'' ; DELETE FROM t ; -- '`, false, "não é suportado"},
+		{"barra invertida em texto comum é literal", `SELECT 'a\' FROM t`, true, ""},
+		{"parâmetro posicional", "SELECT * FROM t WHERE id = $1", true, ""},
 		{"vazia", "   ", false, "vazia"},
 		{"só comentário", "-- nada", false, "vazia"},
 		{"aspa aberta", "SELECT 'abc", false, "não terminado"},
@@ -70,4 +74,43 @@ func TestCheckPreservaTexto(t *testing.T) {
 	if !v.Allowed || !strings.Contains(v.SQL, "'x -- y'") {
 		t.Errorf("texto entre aspas deveria ficar intacto: %+v", v)
 	}
+}
+
+// FuzzCheck confere duas propriedades para qualquer entrada que o guard aceite:
+// o que vai ao banco não tem comando proibido nem segunda instrução, e passar de
+// novo pelo guard dá o mesmo resultado.
+func FuzzCheck(f *testing.F) {
+	for _, seed := range []string{
+		"SELECT 1", "SELECT 'a;b'", "WITH t AS (SELECT 1) SELECT * FROM t",
+		"SELECT 1 -- c", "/* c */ SELECT 1", "DROP TABLE x", `SELECT "a" FROM t`,
+		"SELECT 'it''s'", "SELECT 1; SELECT 2", "SELECT /* a /* b */ c */ 1",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, q string) {
+		v := Check(q)
+		if !v.Allowed {
+			return
+		}
+		scan, _, err := mask(v.SQL)
+		if err != nil {
+			t.Fatalf("SQL aceito não passa pelo mask: %q (%v)", v.SQL, err)
+		}
+		scan = trimStmt(scan)
+		if strings.Contains(scan, ";") {
+			t.Fatalf("SQL aceito tem ';' fora de texto: %q", v.SQL)
+		}
+		words := wordRe.FindAllString(strings.ToLower(scan), -1)
+		if len(words) == 0 || (words[0] != "select" && words[0] != "with") {
+			t.Fatalf("SQL aceito não começa com SELECT/WITH: %q", v.SQL)
+		}
+		for _, w := range words {
+			if deniedWords[w] {
+				t.Fatalf("SQL aceito contém %q: %q", w, v.SQL)
+			}
+		}
+		if !Check(v.SQL).Allowed {
+			t.Fatalf("guard não é idempotente para %q", v.SQL)
+		}
+	})
 }
