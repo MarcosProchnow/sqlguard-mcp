@@ -4,13 +4,15 @@ Servidor [MCP](https://modelcontextprotocol.io) em Go que deixa o Claude consult
 
 Você aponta o servidor para um banco (SQLite ou PostgreSQL) e o Claude passa a listar tabelas, ver colunas e rodar `SELECT`. Qualquer outra coisa é recusada, com o motivo, e cada chamada fica registrada num log de auditoria.
 
+![Fluxo de uma consulta: Claude, servidor MCP, guard de SQL, conexão somente leitura e banco](docs/arquitetura.svg)
+
 ## Por que existe
 
 Dar a um agente de IA acesso direto a um banco é útil e arriscado. Um `DROP` ou um `DELETE` sem `WHERE` custa caro, e "pedir com educação no prompt" não é controle de segurança. Aqui o controle fica no código, em duas barreiras independentes:
 
 | Barreira | Onde | O que faz |
 |---|---|---|
-| 1. Guard de SQL | [`internal/guard`](internal/guard/guard.go) | Recusa a consulta antes de ela chegar ao banco: só uma instrução, só `SELECT`/`WITH`, sem `INSERT`, `DROP`, `INTO`, `FOR UPDATE`, `pg_sleep`, `pg_read_file` etc. Ignora o que está dentro de textos e comentários, então `'drop table'` num filtro não dá falso bloqueio e um comando escondido atrás de comentário não passa. |
+| 1. Guard de SQL | [`internal/guard`](internal/guard/guard.go) | Recusa a consulta antes de ela chegar ao banco: só uma instrução, só `SELECT`/`WITH`, sem `INSERT`, `DROP`, `INTO`, `FOR UPDATE`, `pg_sleep`, `pg_read_file` etc. Ignora o que está dentro de textos e comentários, então `'drop table'` num filtro não dá falso bloqueio e um comando escondido atrás de comentário não passa. O que vai ao banco é a consulta já sem comentários. |
 | 2. Conexão somente leitura | [`internal/store`](internal/store/store.go) | SQLite abre com `mode=ro` e `query_only`; PostgreSQL roda em transação `READ ONLY` com `statement_timeout`. Mesmo que o guard falhasse, o banco recusaria a escrita. |
 
 Mais: limite de linhas por consulta, tempo máximo e log de auditoria em JSON (uma linha por chamada, permitida ou não).
@@ -65,7 +67,8 @@ Precisa de Go 1.23 ou mais novo. Dá para abrir o repositório num Codespace, qu
 ```bash
 go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp
 go run ./cmd/demo bin/sqlguard-mcp        # demonstração ponta a ponta
-go test -race ./...                       # testes
+go test -race ./...                       # testes (os de PostgreSQL pedem SQLGUARD_PG_DSN)
+bash scripts/test-all.sh                  # tudo: testes com SQLite e PostgreSQL, fuzzing e demo
 ```
 
 Conectar ao Claude Code, com a base de demonstração:
@@ -84,17 +87,36 @@ Com PostgreSQL, use `--dsn postgres://usuario:senha@host/banco` (ou a variável 
 | `--timeout` | 5s | tempo máximo por consulta |
 | `--audit` | stderr | arquivo do log de auditoria |
 
+## Testes
+
+Verificado em um Codespace (saídas gravadas em [`docs/test-output.txt`](docs/test-output.txt) e [`docs/fuzz-output.txt`](docs/fuzz-output.txt)):
+
+| O quê | Resultado |
+|---|---|
+| Guard de SQL: 32 casos, com os truques clássicos (comando atrás de comentário, escrita dentro de CTE, `SELECT ... INTO`, `FOR UPDATE`, `E'...'`, `$$`, várias instruções) | passam |
+| Servidor MCP ponta a ponta: initialize, listagem, consulta permitida, consultas bloqueadas, auditoria | passam |
+| SQLite: limite de linhas, tempo máximo, e o banco recusa `DELETE`, `UPDATE`, `DROP` e `INSERT` mesmo sem o guard | passam |
+| **PostgreSQL 15 de verdade:** tabelas, colunas, limite de linhas, `statement_timeout`, e a transação `READ ONLY` recusa escrita (o erro cita `read-only`) | passam |
+| Fuzzing do guard: ~537 mil entradas em 30 s, conferindo que nada aceito tem comando proibido, `;` solto ou deixa de ser idempotente | sem falhas |
+
+Total: 57 verificações, nenhuma pulada, nenhuma falha. O [CI](.github/workflows/ci.yml) repete tudo a cada push, com um PostgreSQL como serviço.
+
+## Decisões de segurança
+
+- **Prefere recusar na dúvida.** Um falso bloqueio custa uma reformulação da consulta; uma consulta de escrita que passe custa um incidente.
+- **Bancos leem o SQL de jeitos diferentes, e isso é brecha.** `E'...'` (escape do PostgreSQL) e `$$...$$` fazem cada banco enxergar os limites do texto de um jeito, e um atacante poderia esconder um `DELETE` onde o guard vê só um texto. Em vez de tentar acertar todos os dialetos, o guard **recusa essas duas formas**. Foi achado numa revisão do próprio código e virou caso de teste.
+- **Duas barreiras, não uma.** O guard pode errar; a conexão somente leitura não depende dele.
+
 ## Como foi feito
 
 - **Só biblioteca padrão**, fora os drivers de banco. O protocolo MCP (JSON-RPC 2.0 sobre stdio) está implementado à mão em [`internal/mcp`](internal/mcp/server.go), de propósito, para dar para ler e entender.
 - **Feito com o Claude Code.** O [`CLAUDE.md`](CLAUDE.md) define a regra de ouro do projeto e um hook ([`.claude/hooks/post-edit.sh`](.claude/hooks/post-edit.sh)) roda `gofmt` e `go vet` depois de cada edição em Go.
-- **Testes de segurança primeiro:** 38 casos, entre eles os truques clássicos (comando atrás de comentário, escrita dentro de CTE, `SELECT ... INTO`, `FOR UPDATE`, texto com `$$`) e um teste que confirma que o banco recusa escrita mesmo sem o guard.
 
 ## Limitações conhecidas
 
-- O guard analisa o texto da consulta, não a árvore SQL completa. Por isso prefere recusar na dúvida: pode bloquear uma consulta legítima que use uma palavra da lista, nunca o contrário. Um parser de verdade é um próximo passo.
-- O suporte a PostgreSQL está escrito, mas os testes automáticos rodam só em SQLite. Falta um teste de integração com PostgreSQL no CI.
-- Ainda não há controle de acesso por tabela ou coluna.
+- O guard analisa o texto da consulta, não a árvore SQL completa. Pode bloquear uma consulta legítima que use uma palavra da lista (por exemplo, uma coluna chamada `set` sem aspas). Um parser de verdade é um próximo passo.
+- Não aceita `E'...'` nem `$$...$$` (ver acima).
+- Ainda não há controle de acesso por tabela ou coluna. Com PostgreSQL, use um usuário do banco que só tenha `SELECT` nas tabelas desejadas.
 
 ## Licença
 
