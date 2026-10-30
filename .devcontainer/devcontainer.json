@@ -1,0 +1,10 @@
+{
+  "name": "sqlguard-mcp",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.23-bookworm",
+  "postCreateCommand": "go mod download",
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go"]
+    }
+  }
+}
