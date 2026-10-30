@@ -6,7 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if ! command -v pg_ctlcluster >/dev/null; then
-  sudo apt-get update -qq
+  # repositórios de terceiros da imagem (ex.: Yarn) às vezes têm chave vencida; não impedem a instalação
+  sudo apt-get update -qq || true
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql >/dev/null
 fi
 sudo service postgresql start
