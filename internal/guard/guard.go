@@ -169,7 +169,7 @@ func isWord(b byte) bool {
 }
 
 // skipQuoted devolve o índice logo após o fechamento da aspa aberta em sql[i].
-// A aspa dobrada ('' ou "") é uma aspa literal; a barra invertida não é escape.
+// A aspa dobrada (” ou "") é uma aspa literal; a barra invertida não é escape.
 func skipQuoted(sql string, i int, q byte) (int, bool) {
 	n := len(sql)
 	for j := i + 1; j < n; j++ {
