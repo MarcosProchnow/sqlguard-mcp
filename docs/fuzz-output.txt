@@ -1,0 +1,15 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/10 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 10/10 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 37484 (12492/sec), new interesting: 85 (total: 95)
+fuzz: elapsed: 6s, execs: 72624 (11714/sec), new interesting: 96 (total: 106)
+fuzz: elapsed: 9s, execs: 136786 (21390/sec), new interesting: 112 (total: 122)
+fuzz: elapsed: 12s, execs: 202248 (21803/sec), new interesting: 129 (total: 139)
+fuzz: elapsed: 15s, execs: 257508 (18430/sec), new interesting: 144 (total: 154)
+fuzz: elapsed: 18s, execs: 313010 (18501/sec), new interesting: 165 (total: 175)
+fuzz: elapsed: 21s, execs: 370811 (19269/sec), new interesting: 171 (total: 181)
+fuzz: elapsed: 24s, execs: 443579 (24252/sec), new interesting: 183 (total: 193)
+fuzz: elapsed: 27s, execs: 486407 (14280/sec), new interesting: 186 (total: 196)
+fuzz: elapsed: 30s, execs: 536807 (16795/sec), new interesting: 194 (total: 204)
+fuzz: elapsed: 31s, execs: 536807 (0/sec), new interesting: 194 (total: 204)
+PASS
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	31.023s

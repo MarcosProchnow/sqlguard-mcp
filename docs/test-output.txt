@@ -22,14 +22,18 @@
 === RUN   TestCheck/função_que_dorme
 === RUN   TestCheck/função_que_lê_arquivo
 === RUN   TestCheck/altera_configuração
-=== RUN   TestCheck/texto_com_$_não_esconde_nada
+=== RUN   TestCheck/texto_entre_$$_não_é_aceito
+=== RUN   TestCheck/texto_com_tag_$x$_não_é_aceito
+=== RUN   TestCheck/string_E_esconderia_a_segunda_instrução
+=== RUN   TestCheck/barra_invertida_em_texto_comum_é_literal
+=== RUN   TestCheck/parâmetro_posicional
 === RUN   TestCheck/vazia
 === RUN   TestCheck/só_comentário
 === RUN   TestCheck/aspa_aberta
 === RUN   TestCheck/comentário_aberto
 === RUN   TestCheck/pragma
 === RUN   TestCheck/transação
---- PASS: TestCheck (0.02s)
+--- PASS: TestCheck (0.01s)
     --- PASS: TestCheck/select_simples (0.00s)
     --- PASS: TestCheck/select_com_ponto_e_vírgula_final (0.00s)
     --- PASS: TestCheck/with_cte (0.00s)
@@ -51,7 +55,11 @@
     --- PASS: TestCheck/função_que_dorme (0.00s)
     --- PASS: TestCheck/função_que_lê_arquivo (0.00s)
     --- PASS: TestCheck/altera_configuração (0.00s)
-    --- PASS: TestCheck/texto_com_$_não_esconde_nada (0.00s)
+    --- PASS: TestCheck/texto_entre_$$_não_é_aceito (0.00s)
+    --- PASS: TestCheck/texto_com_tag_$x$_não_é_aceito (0.00s)
+    --- PASS: TestCheck/string_E_esconderia_a_segunda_instrução (0.00s)
+    --- PASS: TestCheck/barra_invertida_em_texto_comum_é_literal (0.00s)
+    --- PASS: TestCheck/parâmetro_posicional (0.00s)
     --- PASS: TestCheck/vazia (0.00s)
     --- PASS: TestCheck/só_comentário (0.00s)
     --- PASS: TestCheck/aspa_aberta (0.00s)
@@ -62,23 +70,53 @@
 --- PASS: TestCheckRemoveComentarioEPontoEVirgula (0.00s)
 === RUN   TestCheckPreservaTexto
 --- PASS: TestCheckPreservaTexto (0.00s)
+=== RUN   FuzzCheck
+=== RUN   FuzzCheck/seed#0
+=== RUN   FuzzCheck/seed#1
+=== RUN   FuzzCheck/seed#2
+=== RUN   FuzzCheck/seed#3
+=== RUN   FuzzCheck/seed#4
+=== RUN   FuzzCheck/seed#5
+=== RUN   FuzzCheck/seed#6
+=== RUN   FuzzCheck/seed#7
+=== RUN   FuzzCheck/seed#8
+=== RUN   FuzzCheck/seed#9
+--- PASS: FuzzCheck (0.00s)
+    --- PASS: FuzzCheck/seed#0 (0.00s)
+    --- PASS: FuzzCheck/seed#1 (0.00s)
+    --- PASS: FuzzCheck/seed#2 (0.00s)
+    --- PASS: FuzzCheck/seed#3 (0.00s)
+    --- PASS: FuzzCheck/seed#4 (0.00s)
+    --- PASS: FuzzCheck/seed#5 (0.00s)
+    --- PASS: FuzzCheck/seed#6 (0.00s)
+    --- PASS: FuzzCheck/seed#7 (0.00s)
+    --- PASS: FuzzCheck/seed#8 (0.00s)
+    --- PASS: FuzzCheck/seed#9 (0.00s)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	1.035s
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	1.039s
 === RUN   TestInitializeEListaFerramentas
---- PASS: TestInitializeEListaFerramentas (0.03s)
+--- PASS: TestInitializeEListaFerramentas (0.10s)
 === RUN   TestQueryPermitidaEBloqueada
---- PASS: TestQueryPermitidaEBloqueada (0.04s)
+--- PASS: TestQueryPermitidaEBloqueada (0.08s)
 === RUN   TestListTablesEDescribe
---- PASS: TestListTablesEDescribe (0.03s)
+--- PASS: TestListTablesEDescribe (0.08s)
 === RUN   TestMetodoDesconhecido
---- PASS: TestMetodoDesconhecido (0.02s)
+--- PASS: TestMetodoDesconhecido (0.03s)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	1.142s
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	1.343s
+=== RUN   TestPGTablesEDescribe
+--- PASS: TestPGTablesEDescribe (0.04s)
+=== RUN   TestPGRecusaEscrita
+--- PASS: TestPGRecusaEscrita (0.06s)
+=== RUN   TestPGLimiteETimeout
+--- PASS: TestPGLimiteETimeout (0.38s)
 === RUN   TestTablesEDescribe
---- PASS: TestTablesEDescribe (0.03s)
+--- PASS: TestTablesEDescribe (0.07s)
 === RUN   TestQueryLimitaLinhas
 --- PASS: TestQueryLimitaLinhas (0.03s)
 === RUN   TestBancoRecusaEscrita
 --- PASS: TestBancoRecusaEscrita (0.03s)
+=== RUN   TestQueryTimeout
+--- PASS: TestQueryTimeout (0.33s)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	1.108s
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	1.965s
