@@ -132,3 +132,52 @@ func TestMetodoDesconhecido(t *testing.T) {
 		t.Error("esperava erro JSON-RPC")
 	}
 }
+
+// Backend falso: devolve um resultado que o JSON não consegue representar.
+type backendFalso struct{ res *store.Result }
+
+func (b backendFalso) Tables(context.Context) (*store.Result, error)           { return b.res, nil }
+func (b backendFalso) Describe(context.Context, string) (*store.Result, error) { return b.res, nil }
+func (b backendFalso) Query(context.Context, string, int) (*store.Result, error) {
+	return b.res, nil
+}
+func (b backendFalso) Dialect() store.Dialect { return store.SQLite }
+
+// Achado numa revisão: o erro do json.Marshal era ignorado e a resposta saía vazia, como sucesso.
+func TestRespostaNaoSerializavelViraErro(t *testing.T) {
+	s := New(backendFalso{res: &store.Result{Columns: []string{"x"}, Rows: [][]any{{make(chan int)}}, RowCount: 1}}, 10, "test", nil)
+	resps := rpc(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query","arguments":{"sql":"SELECT 1"}}}`)
+	text, isErr := toolText(t, resps[0])
+	if !isErr || !strings.HasPrefix(text, "erro:") {
+		t.Errorf("deveria ser erro explícito, veio isError=%v texto=%q", isErr, text)
+	}
+}
+
+func TestInfinitoNaoViraRespostaVazia(t *testing.T) {
+	s, _ := newServer(t)
+	resps := rpc(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query","arguments":{"sql":"SELECT 1e999 AS x"}}}`)
+	text, isErr := toolText(t, resps[0])
+	if isErr || !strings.Contains(text, `"+Inf"`) {
+		t.Errorf("esperava +Inf no resultado: isError=%v texto=%q", isErr, text)
+	}
+}
+
+// O guard recebe o dialeto do banco conectado: o ataque dos colchetes é bloqueado no SQLite.
+func TestAtaqueDosColchetesBloqueado(t *testing.T) {
+	s, log := newServer(t)
+	resps := rpc(t, s,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query","arguments":{"sql":"SELECT id AS [a'] FROM clientes WHERE id = 1 ; DELETE FROM clientes ; --'"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query","arguments":{"sql":"SELECT COUNT(*) AS n FROM clientes"}}}`,
+	)
+	text, isErr := toolText(t, resps[0])
+	if !isErr || !strings.HasPrefix(text, "consulta bloqueada") {
+		t.Errorf("deveria bloquear: %q", text)
+	}
+	text, _ = toolText(t, resps[1])
+	if !strings.Contains(text, "[[6]]") {
+		t.Errorf("clientes deveria continuar com 6 linhas: %q", text)
+	}
+	if (*log)[0].Allowed {
+		t.Error("a auditoria deveria registrar o bloqueio")
+	}
+}

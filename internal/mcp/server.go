@@ -22,6 +22,15 @@ type Backend interface {
 	Tables(ctx context.Context) (*store.Result, error)
 	Describe(ctx context.Context, table string) (*store.Result, error)
 	Query(ctx context.Context, sql string, maxRows int) (*store.Result, error)
+	Dialect() store.Dialect
+}
+
+// guardDialect diz ao guard como ler o SQL do banco conectado.
+func guardDialect(d store.Dialect) guard.Dialect {
+	if d == store.SQLite {
+		return guard.SQLite
+	}
+	return guard.Postgres
 }
 
 // Entry é uma linha do log de auditoria: toda chamada de ferramenta gera uma.
@@ -177,8 +186,11 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		return finish("erro: "+err.Error(), true)
 	}
 	ok := func(res *store.Result) (string, bool) {
+		b, err := json.Marshal(res)
+		if err != nil { // nunca devolver resposta vazia como se fosse sucesso
+			return fail(fmt.Errorf("resultado não serializável: %w", err))
+		}
 		e.Allowed, e.Rows = true, res.RowCount
-		b, _ := json.Marshal(res)
 		return finish(string(b), false)
 	}
 
@@ -214,7 +226,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 			return fail(fmt.Errorf("informe o argumento sql"))
 		}
 		e.SQL = a.SQL
-		v := guard.Check(a.SQL)
+		v := guard.Check(a.SQL, guardDialect(s.backend.Dialect()))
 		if !v.Allowed {
 			e.Reason = v.Reason
 			return finish("consulta bloqueada: "+v.Reason, true)

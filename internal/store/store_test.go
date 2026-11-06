@@ -2,10 +2,15 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/MarcosProchnow/sqlguard-mcp/internal/guard"
 )
 
 func openDemo(t *testing.T) *Store {
@@ -101,4 +106,137 @@ func TestQueryTimeout(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("levou %v para interromper", d)
 	}
+}
+
+// O número de linhas não limita o tamanho: uma célula sozinha pode ter megabytes.
+func TestLimitesDeTamanho(t *testing.T) {
+	st := openDemo(t)
+	st.SetLimits(100, 1000)
+	ctx := context.Background()
+
+	res, err := st.Query(ctx, "SELECT hex(zeroblob(5000)) AS h", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	celula, _ := res.Rows[0][0].(string)
+	if len(celula) > 200 || !strings.Contains(celula, "cortado") || res.TruncatedCells != 1 {
+		t.Errorf("célula deveria ser cortada (tamanho %d, cortadas %d)", len(celula), res.TruncatedCells)
+	}
+
+	res, err = st.Query(ctx, "SELECT hex(zeroblob(45)) AS h FROM clientes, clientes, clientes", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Truncated || res.RowCount > 20 {
+		t.Errorf("o resultado deveria parar por tamanho: RowCount=%d Truncated=%v", res.RowCount, res.Truncated)
+	}
+}
+
+// Achado numa revisão: Inf e NaN fazem o json.Marshal falhar e a resposta saía vazia.
+func TestInfinitoENaNViramTexto(t *testing.T) {
+	st := openDemo(t)
+	res, err := st.Query(context.Background(), "SELECT 1e999 AS mais, -1e999 AS menos", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Rows[0][0] != "+Inf" || res.Rows[0][1] != "-Inf" {
+		t.Errorf("linha = %v, esperado [+Inf -Inf]", res.Rows[0])
+	}
+}
+
+func TestBytesQueNaoSaoUTF8(t *testing.T) {
+	st := openDemo(t)
+	res, err := st.Query(context.Background(), "SELECT x'ff00fe' AS b, x'6162' AS ok", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Rows[0][0] != "base64:/wD+" || res.Rows[0][1] != "ab" {
+		t.Errorf("linha = %v", res.Rows[0])
+	}
+}
+
+func TestCutStringNaoPartePOrRune(t *testing.T) {
+	got := cutString("aç", 2) // "ç" ocupa 2 bytes e começa no byte 1
+	if got != "a" {
+		t.Errorf("cutString = %q, esperado %q", got, "a")
+	}
+}
+
+// snapshot guarda o conteúdo inteiro da base de demonstração (esquema e dados).
+func snapshot(db *sql.DB) string {
+	var b strings.Builder
+	for _, q := range []string{
+		"SELECT type, name, sql FROM sqlite_master ORDER BY name",
+		"SELECT * FROM clientes ORDER BY id",
+		"SELECT * FROM produtos ORDER BY id",
+		"SELECT * FROM pedidos ORDER BY id",
+		"SELECT * FROM itens_pedido ORDER BY pedido_id, produto_id",
+	} {
+		rows, err := db.Query(q)
+		if err != nil {
+			fmt.Fprintf(&b, "ERRO %s: %v\n", q, err) // tabela sumiu: o snapshot muda
+			continue
+		}
+		cols, _ := rows.Columns()
+		for rows.Next() {
+			vals := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			rows.Scan(ptrs...)
+			fmt.Fprintln(&b, vals...)
+		}
+		rows.Close()
+	}
+	return b.String()
+}
+
+// FuzzGuardNaoAltera é o teste que pega o que o fuzzing do guard sozinho não pega:
+// toda consulta que o guard aceitar roda num SQLite GRAVÁVEL (sem a segunda barreira)
+// e o banco não pode mudar. Compara o guard com o que o banco de verdade faz.
+func FuzzGuardNaoAltera(f *testing.F) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "testdata", "loja.sql"))
+	if err != nil {
+		f.Fatal(err)
+	}
+	for _, seed := range []string{
+		"SELECT * FROM clientes",
+		"SELECT id AS [a'] FROM clientes WHERE id = 1 ; DELETE FROM clientes ; --'",
+		"SELECT 1; DELETE FROM pedidos",
+		"SELECT [id] FROM clientes",
+		"SELECT 'x'; DROP TABLE clientes",
+		"SELECT * FROM clientes -- ; DELETE FROM clientes",
+		"WITH d AS (SELECT 1) SELECT * FROM d",
+		"SELECT nome FROM clientes WHERE nome LIKE '%a%'",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, q string) {
+		v := guard.Check(q, guard.SQLite)
+		if !v.Allowed {
+			return
+		}
+		db, err := sql.Open("sqlite", ":memory:")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		db.SetMaxOpenConns(1) // uma conexão só, senão cada uma teria o seu banco em memória
+		if _, err := db.Exec(string(script)); err != nil {
+			t.Fatal(err)
+		}
+		antes := snapshot(db)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		if rows, err := db.QueryContext(ctx, v.SQL); err == nil {
+			for rows.Next() {
+			}
+			rows.Close()
+		}
+		if depois := snapshot(db); depois != antes {
+			t.Fatalf("o guard aceitou uma consulta que alterou o banco: %q", q)
+		}
+	})
 }

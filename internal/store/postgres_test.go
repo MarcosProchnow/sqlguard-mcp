@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,5 +119,70 @@ func TestPGLimiteETimeout(t *testing.T) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("levou %v para interromper", d)
+	}
+}
+
+// O aviso de privilégios: superusuário é o pior caso, e um usuário só com SELECT não gera aviso.
+func TestPGAvisaPrivilegios(t *testing.T) {
+	st := openPG(t, 5*time.Second)
+	ctx := context.Background()
+
+	warns, err := st.Warnings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) == 0 || !strings.Contains(warns[0], "superusuário") {
+		t.Errorf("o usuário de teste é superusuário e deveria gerar aviso: %v", warns)
+	}
+
+	dsn := pgDSN(t)
+	admin, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	for _, q := range []string{
+		`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'leitor') THEN DROP OWNED BY leitor; DROP ROLE leitor; END IF; END $$`,
+		`CREATE ROLE leitor LOGIN PASSWORD 'leitor'`,
+		`GRANT USAGE ON SCHEMA public TO leitor`,
+		`GRANT SELECT ON ALL TABLES IN SCHEMA public TO leitor`,
+	} {
+		if _, err := admin.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	t.Cleanup(func() {
+		admin.Exec("DROP OWNED BY leitor")
+		admin.Exec("DROP ROLE IF EXISTS leitor")
+	})
+
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = url.UserPassword("leitor", "leitor")
+	leitor, err := Open(u.String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leitor.Close()
+	warns, err = leitor.Warnings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("um usuário só com SELECT não deveria gerar aviso: %v", warns)
+	}
+	if res, err := leitor.Query(ctx, "SELECT COUNT(*) FROM clientes", 1); err != nil || res.Rows[0][0] != int64(6) {
+		t.Errorf("o leitor deveria conseguir consultar: %v %v", res, err)
+	}
+
+	// um usuário que pode escrever numa tabela gera aviso
+	if _, err := admin.Exec(`GRANT UPDATE ON clientes TO leitor`); err != nil {
+		t.Fatal(err)
+	}
+	warns, err = leitor.Warnings(ctx)
+	if err != nil || len(warns) != 1 || !strings.Contains(warns[0], "escrever em 1 tabela") {
+		t.Errorf("deveria avisar de 1 tabela com escrita: %v %v", warns, err)
 	}
 }

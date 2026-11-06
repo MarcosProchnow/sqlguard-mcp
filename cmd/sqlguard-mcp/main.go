@@ -24,16 +24,25 @@ func main() {
 		timeout = flag.Duration("timeout", 5*time.Second, "tempo máximo por consulta")
 		audit   = flag.String("audit", "", "arquivo do log de auditoria (JSON por linha); vazio escreve em stderr")
 		seed    = flag.String("seed", "", "só SQLite: script SQL que cria o banco antes de abrir (uso em demonstração)")
+		maxCell = flag.Int("max-cell-bytes", store.DefaultMaxCellBytes, "máximo de bytes por célula do resultado; o excedente é cortado (0 desliga)")
+		maxSize = flag.Int("max-bytes", store.DefaultMaxResultBytes, "máximo de bytes por resultado; o excedente é truncado (0 desliga)")
+		strict  = flag.Bool("strict", false, "recusa iniciar se o usuário do banco tiver mais poder que um leitor (PostgreSQL)")
 	)
 	flag.Parse()
 
-	if err := run(*dsn, *seed, *audit, *maxRows, *timeout); err != nil {
+	lim := limits{maxCell: *maxCell, maxBytes: *maxSize, strict: *strict}
+	if err := run(*dsn, *seed, *audit, *maxRows, *timeout, lim); err != nil {
 		fmt.Fprintln(os.Stderr, "sqlguard-mcp:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dsn, seed, auditPath string, maxRows int, timeout time.Duration) error {
+type limits struct {
+	maxCell, maxBytes int
+	strict            bool
+}
+
+func run(dsn, seed, auditPath string, maxRows int, timeout time.Duration, lim limits) error {
 	if dsn == "" {
 		return fmt.Errorf("informe --dsn ou a variável SQLGUARD_DSN")
 	}
@@ -56,6 +65,18 @@ func run(dsn, seed, auditPath string, maxRows int, timeout time.Duration) error 
 		return err
 	}
 	defer st.Close()
+	st.SetLimits(lim.maxCell, lim.maxBytes)
+
+	warns, err := st.Warnings(context.Background())
+	if err != nil {
+		return fmt.Errorf("verificando privilégios do usuário do banco: %w", err)
+	}
+	for _, w := range warns {
+		fmt.Fprintln(os.Stderr, "aviso:", w)
+	}
+	if lim.strict && len(warns) > 0 {
+		return fmt.Errorf("--strict: o usuário do banco tem mais poder que um leitor")
+	}
 
 	var logOut io.Writer = os.Stderr
 	if auditPath != "" {

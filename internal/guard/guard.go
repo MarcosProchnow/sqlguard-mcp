@@ -11,6 +11,16 @@ import (
 	"strings"
 )
 
+// Dialect diz qual SQL o banco fala. O guard precisa saber, porque cada banco lê o
+// texto de um jeito: no SQLite, [nome] é um identificador; no PostgreSQL, colchetes
+// são índices de array.
+type Dialect int
+
+const (
+	SQLite Dialect = iota + 1
+	Postgres
+)
+
 // Verdict é o resultado da análise de uma consulta.
 type Verdict struct {
 	Allowed bool
@@ -29,15 +39,23 @@ var deniedWords = toSet(
 
 // Funções que leem arquivos, dormem, travam ou mudam estado, mesmo dentro de um SELECT.
 var deniedPrefixes = []string{
-	"pg_sleep", "pg_read", "pg_ls", "pg_advisory", "pg_terminate", "pg_cancel",
+	"pg_sleep", "pg_read", "pg_ls", "pg_advisory", "pg_try_advisory", "pg_terminate", "pg_cancel",
 	"lo_", "dblink", "set_config", "load_extension", "readfile", "writefile",
+	// funções administrativas que rodam dentro de um SELECT, mesmo numa transação READ ONLY
+	"pg_reload", "pg_notify", "pg_stat_reset", "pg_stat_statements_reset", "pg_rotate",
+	"pg_switch", "pg_create", "pg_drop", "pg_promote", "pg_wal_replay", "pg_backup",
+	"pg_replication", "pg_logical", "pg_import", "pg_export", "pg_file", "pg_log",
+	"nextval", "setval",
 }
 
 var wordRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_$]*`)
 
-// Check analisa a consulta e devolve o veredito.
-func Check(query string) Verdict {
-	scan, exec, err := mask(query)
+// Check analisa a consulta, lida como SQL do dialeto d, e devolve o veredito.
+func Check(query string, d Dialect) Verdict {
+	if d != SQLite && d != Postgres {
+		return deny("dialeto desconhecido")
+	}
+	scan, exec, err := mask(query, d)
 	if err != nil {
 		return deny(err.Error())
 	}
@@ -87,7 +105,7 @@ func toSet(items ...string) map[string]bool {
 //   - scan: sem comentários, e com strings e identificadores entre aspas esvaziados,
 //     para procurar palavras sem cair em falso positivo ("drop" dentro de um texto);
 //   - exec: sem comentários, com strings intactas, que é o que vai ao banco.
-func mask(sql string) (scan, exec string, err error) {
+func mask(sql string, d Dialect) (scan, exec string, err error) {
 	var s, e strings.Builder
 	n := len(sql)
 	for i := 0; i < n; {
@@ -143,6 +161,17 @@ func mask(sql string) (scan, exec string, err error) {
 			e.WriteString(sql[i:j])
 			s.WriteString(`""`)
 			i = j
+
+		case c == '[' && d == SQLite:
+			// No SQLite, [nome] é um identificador sem escape. Sem tratar isso, um apóstrofo
+			// dentro dos colchetes faz o guard ver um texto onde o banco vê código.
+			j := strings.IndexByte(sql[i:], ']')
+			if j < 0 {
+				return "", "", errors.New("identificador entre colchetes não terminado")
+			}
+			e.WriteString(sql[i : i+j+1])
+			s.WriteString(`""`)
+			i += j + 1
 
 		case c == '$' && (i == 0 || !isWord(sql[i-1])):
 			// $$...$$ só existe no PostgreSQL; em outros bancos o conteúdo seria código.
