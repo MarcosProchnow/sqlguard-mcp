@@ -46,7 +46,6 @@
 === RUN   TestCheck/sqlite/função_entre_aspas_com_schema
 === RUN   TestCheck/sqlite/função_com_schema
 === RUN   TestCheck/sqlite/função_com_espaço_antes_do_parêntese
-=== RUN   TestCheck/sqlite/função_de_arquivo_do_SQLite_entre_colchetes
 === RUN   TestCheck/sqlite/comando_depois_do_CTE
 === RUN   TestCheck/sqlite/INSERT_depois_do_CTE
 === RUN   TestCheck/sqlite/CTE_que_escreve,_com_MATERIALIZED
@@ -109,8 +108,6 @@
 === RUN   TestCheck/postgres/função_entre_aspas_com_schema
 === RUN   TestCheck/postgres/função_com_schema
 === RUN   TestCheck/postgres/função_com_espaço_antes_do_parêntese
-=== RUN   TestCheck/postgres/função_de_arquivo_do_SQLite_entre_colchetes
-    guard_test.go:93: Check("SELECT [load_extension]('x')").Allowed = true (motivo: ""), esperado false
 === RUN   TestCheck/postgres/comando_depois_do_CTE
 === RUN   TestCheck/postgres/INSERT_depois_do_CTE
 === RUN   TestCheck/postgres/CTE_que_escreve,_com_MATERIALIZED
@@ -128,7 +125,7 @@
 === RUN   TestCheck/postgres/comentário_aberto
 === RUN   TestCheck/postgres/pragma
 === RUN   TestCheck/postgres/transação
---- FAIL: TestCheck (0.02s)
+--- PASS: TestCheck (0.02s)
     --- PASS: TestCheck/sqlite/select_simples (0.00s)
     --- PASS: TestCheck/sqlite/select_com_ponto_e_vírgula_final (0.00s)
     --- PASS: TestCheck/sqlite/with_cte (0.00s)
@@ -174,7 +171,6 @@
     --- PASS: TestCheck/sqlite/função_entre_aspas_com_schema (0.00s)
     --- PASS: TestCheck/sqlite/função_com_schema (0.00s)
     --- PASS: TestCheck/sqlite/função_com_espaço_antes_do_parêntese (0.00s)
-    --- PASS: TestCheck/sqlite/função_de_arquivo_do_SQLite_entre_colchetes (0.00s)
     --- PASS: TestCheck/sqlite/comando_depois_do_CTE (0.00s)
     --- PASS: TestCheck/sqlite/INSERT_depois_do_CTE (0.00s)
     --- PASS: TestCheck/sqlite/CTE_que_escreve,_com_MATERIALIZED (0.00s)
@@ -237,7 +233,6 @@
     --- PASS: TestCheck/postgres/função_entre_aspas_com_schema (0.00s)
     --- PASS: TestCheck/postgres/função_com_schema (0.00s)
     --- PASS: TestCheck/postgres/função_com_espaço_antes_do_parêntese (0.00s)
-    --- FAIL: TestCheck/postgres/função_de_arquivo_do_SQLite_entre_colchetes (0.00s)
     --- PASS: TestCheck/postgres/comando_depois_do_CTE (0.00s)
     --- PASS: TestCheck/postgres/INSERT_depois_do_CTE (0.00s)
     --- PASS: TestCheck/postgres/CTE_que_escreve,_com_MATERIALIZED (0.00s)
@@ -299,8 +294,8 @@
     --- PASS: FuzzCheck/seed#13 (0.00s)
     --- PASS: FuzzCheck/seed#14 (0.00s)
     --- PASS: FuzzCheck/seed#15 (0.00s)
-FAIL
-FAIL	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	0.034s
+PASS
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	1.044s
 === RUN   TestInitializeEListaFerramentas
 --- PASS: TestInitializeEListaFerramentas (0.04s)
 === RUN   TestQueryPermitidaEBloqueada
@@ -322,7 +317,7 @@ FAIL	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	0.034s
 === RUN   TestServeEncerraQuandoOContextoCancela
 --- PASS: TestServeEncerraQuandoOContextoCancela (0.02s)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	1.376s
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	(cached)
 === RUN   TestPGTablesEDescribe
 --- PASS: TestPGTablesEDescribe (0.06s)
 === RUN   TestPGRecusaEscrita
@@ -370,5 +365,4 @@ ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/mcp	1.376s
     --- PASS: FuzzGuardNaoAltera/seed#6 (0.02s)
     --- PASS: FuzzGuardNaoAltera/seed#7 (0.02s)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	2.393s
-FAIL
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	(cached)

@@ -1,30 +1,30 @@
-fuzz: elapsed: 0s, gathering baseline coverage: 0/206 completed
-fuzz: elapsed: 0s, gathering baseline coverage: 206/206 completed, now fuzzing with 2 workers
-fuzz: elapsed: 3s, execs: 55906 (18632/sec), new interesting: 26 (total: 232)
-fuzz: elapsed: 6s, execs: 81671 (8589/sec), new interesting: 33 (total: 239)
-fuzz: elapsed: 9s, execs: 116695 (11675/sec), new interesting: 38 (total: 244)
-fuzz: elapsed: 12s, execs: 174891 (19399/sec), new interesting: 46 (total: 252)
-fuzz: elapsed: 15s, execs: 207799 (10965/sec), new interesting: 54 (total: 260)
-fuzz: elapsed: 18s, execs: 229727 (7311/sec), new interesting: 57 (total: 263)
-fuzz: elapsed: 21s, execs: 281120 (17130/sec), new interesting: 75 (total: 281)
-fuzz: elapsed: 24s, execs: 321009 (13299/sec), new interesting: 79 (total: 285)
-fuzz: elapsed: 27s, execs: 362072 (13684/sec), new interesting: 80 (total: 286)
-fuzz: elapsed: 30s, execs: 427139 (21692/sec), new interesting: 82 (total: 288)
-fuzz: elapsed: 30s, execs: 427139 (0/sec), new interesting: 82 (total: 288)
+fuzz: elapsed: 0s, gathering baseline coverage: 0/292 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 292/292 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 13058 (4351/sec), new interesting: 12 (total: 304)
+fuzz: elapsed: 6s, execs: 43693 (10212/sec), new interesting: 13 (total: 305)
+fuzz: elapsed: 9s, execs: 78949 (11756/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 12s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 15s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 18s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 21s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 24s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 27s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 30s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
+fuzz: elapsed: 31s, execs: 78949 (0/sec), new interesting: 14 (total: 306)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	30.152s
-fuzz: elapsed: 0s, gathering baseline coverage: 0/8 completed
-fuzz: elapsed: 0s, gathering baseline coverage: 8/8 completed, now fuzzing with 2 workers
-fuzz: elapsed: 3s, execs: 805 (268/sec), new interesting: 4 (total: 12)
-fuzz: elapsed: 6s, execs: 2990 (729/sec), new interesting: 12 (total: 20)
-fuzz: elapsed: 9s, execs: 4091 (367/sec), new interesting: 14 (total: 22)
-fuzz: elapsed: 12s, execs: 4744 (218/sec), new interesting: 15 (total: 23)
-fuzz: elapsed: 15s, execs: 7144 (801/sec), new interesting: 21 (total: 29)
-fuzz: elapsed: 18s, execs: 8545 (467/sec), new interesting: 27 (total: 35)
-fuzz: elapsed: 21s, execs: 10212 (556/sec), new interesting: 31 (total: 39)
-fuzz: elapsed: 24s, execs: 10665 (151/sec), new interesting: 32 (total: 40)
-fuzz: elapsed: 27s, execs: 10665 (0/sec), new interesting: 32 (total: 40)
-fuzz: elapsed: 30s, execs: 10665 (0/sec), new interesting: 32 (total: 40)
-fuzz: elapsed: 31s, execs: 10665 (0/sec), new interesting: 32 (total: 40)
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/guard	31.074s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/40 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 40/40 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 2132 (710/sec), new interesting: 4 (total: 44)
+fuzz: elapsed: 6s, execs: 5235 (1035/sec), new interesting: 16 (total: 56)
+fuzz: elapsed: 9s, execs: 7309 (691/sec), new interesting: 17 (total: 57)
+fuzz: elapsed: 12s, execs: 10194 (961/sec), new interesting: 31 (total: 71)
+fuzz: elapsed: 15s, execs: 13546 (1118/sec), new interesting: 46 (total: 86)
+fuzz: elapsed: 18s, execs: 15266 (573/sec), new interesting: 52 (total: 92)
+fuzz: elapsed: 21s, execs: 26874 (3869/sec), new interesting: 61 (total: 101)
+fuzz: elapsed: 24s, execs: 28631 (586/sec), new interesting: 65 (total: 105)
+fuzz: elapsed: 27s, execs: 29432 (267/sec), new interesting: 65 (total: 105)
+fuzz: elapsed: 30s, execs: 33961 (1510/sec), new interesting: 73 (total: 113)
+fuzz: elapsed: 31s, execs: 33961 (0/sec), new interesting: 73 (total: 113)
 PASS
-ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	31.037s
+ok  	github.com/MarcosProchnow/sqlguard-mcp/internal/store	31.050s

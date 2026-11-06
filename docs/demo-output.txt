@@ -19,7 +19,13 @@
 6. Tentativa: escrever dentro de uma CTE (bloqueada)
   [BLOQUEIO] consulta bloqueada: palavra proibida: DELETE
 
-7. Os dados continuam intactos?
+7. Tentativa: esconder o DELETE atrás de [colchetes] (bloqueada)
+  [BLOQUEIO] consulta bloqueada: apenas uma instrução por consulta
+
+8. Tentativa: função entre aspas (bloqueada)
+  [BLOQUEIO] consulta bloqueada: função proibida: load_extension
+
+9. Os dados continuam intactos?
   [OK      ] {"columns":["pedidos"],"rows":[[12]],"row_count":1,"truncated":false}
 
 == Log de auditoria (tmp/audit.jsonl)
@@ -29,4 +35,8 @@
   query          permitida=false linhas=0   só SELECT e WITH são permitidos (recebido: DROP)
   query          permitida=false linhas=0   apenas uma instrução por consulta
   query          permitida=false linhas=0   palavra proibida: DELETE
+  query          permitida=false linhas=0   apenas uma instrução por consulta
+  query          permitida=false linhas=0   função proibida: load_extension
   query          permitida=true  linhas=1   <nil>
+
+Todas as verificações da demo passaram
