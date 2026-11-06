@@ -116,8 +116,7 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		b, _ := json.Marshal(resp)
 		mu.Lock()
 		defer mu.Unlock()
-		w.Write(append(b, '
-'))
+		w.Write(append(b, '\n'))
 	}
 
 	for {
