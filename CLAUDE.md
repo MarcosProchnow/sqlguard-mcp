@@ -29,4 +29,4 @@ go run ./cmd/demo bin/sqlguard-mcp   # demonstração ponta a ponta
 
 ## Ao mexer no guard
 
-Adicione o caso em `internal/guard/guard_test.go` primeiro, com o motivo esperado do bloqueio. Prefira recusar na dúvida: um falso bloqueio custa uma reformulação, um falso positivo de permissão custa um incidente.
+Adicione o caso em `internal/guard/guard_test.go` primeiro, com o motivo esperado do bloqueio. Rode também `go test -run '^$' -fuzz FuzzGuardNaoAltera -fuzztime 30s ./internal/store`: ele compara o guard com o que o SQLite de verdade faz. Prefira recusar na dúvida: um falso bloqueio custa uma reformulação, um falso positivo de permissão custa um incidente.

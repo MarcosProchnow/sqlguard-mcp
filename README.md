@@ -45,18 +45,19 @@ Saída real de `go run ./cmd/demo bin/sqlguard-mcp`, que sobe o servidor e fala 
 6. Tentativa: escrever dentro de uma CTE (bloqueada)
   [BLOQUEIO] consulta bloqueada: palavra proibida: DELETE
 
-7. Os dados continuam intactos?
+7. Tentativa: esconder o DELETE atrás de [colchetes] (bloqueada)
+  [BLOQUEIO] consulta bloqueada: apenas uma instrução por consulta
+
+8. Tentativa: função entre aspas (bloqueada)
+  [BLOQUEIO] consulta bloqueada: função proibida: load_extension
+
+9. Os dados continuam intactos?
   [OK      ] {"columns":["pedidos"],"rows":[[12]],"row_count":1,"truncated":false}
 
-== Log de auditoria
-  list_tables    permitida=true  linhas=4
-  describe_table permitida=true  linhas=4
-  query          permitida=true  linhas=3
-  query          permitida=false linhas=0   só SELECT e WITH são permitidos (recebido: DROP)
-  query          permitida=false linhas=0   apenas uma instrução por consulta
-  query          permitida=false linhas=0   palavra proibida: DELETE
-  query          permitida=true  linhas=1
+Todas as verificações da demo passaram
 ```
+
+Cada passo declara o que espera, e a demo sai com erro se a resposta for outra: ela é também um teste ponta a ponta no CI.
 
 A saída completa está em [`docs/demo-output.txt`](docs/demo-output.txt) e a dos testes em [`docs/test-output.txt`](docs/test-output.txt).
 
@@ -96,14 +97,15 @@ Verificado em um Codespace (saídas gravadas em [`docs/test-output.txt`](docs/te
 
 | O quê | Resultado |
 |---|---|
-| Guard de SQL: 36 casos, rodados nos dois dialetos, com os truques clássicos (comando atrás de comentário, escrita dentro de CTE, `SELECT ... INTO`, `FOR UPDATE`, `E'...'`, `$$`, `[colchetes]` do SQLite, várias instruções) | passam |
-| Servidor MCP ponta a ponta: initialize, listagem, consulta permitida, bloqueadas, auditoria, resposta que o JSON não representa | passam |
-| SQLite: limite de linhas, de bytes por célula e por resultado, tempo máximo, `Inf`/`NaN`, bytes que não são UTF-8, e o banco recusa escrita mesmo sem o guard | passam |
+| Guard de SQL: 58 casos, rodados nos dois dialetos, com os truques clássicos (comando atrás de comentário, escrita dentro de CTE ou depois dela, `SELECT ... INTO`, `FOR UPDATE`, função entre aspas, `E'...'`, `$$`, `[colchetes]` do SQLite, várias instruções) e os nomes de coluna que não podem ser bloqueados (`call`, `begin`, `lock`) | passam |
+| Servidor MCP ponta a ponta: initialize, negociação de versão, `id` nulo, listagem, consultas permitidas e bloqueadas, auditoria, resposta que o JSON não representa, encerramento por Ctrl+C | passam |
+| SQLite: limites de linhas e de bytes, tempo máximo, `Inf`/`NaN`, bytes que não são UTF-8, caminhos com `#`, `?`, `%` e acento, e o banco recusa escrita mesmo sem o guard | passam |
 | **PostgreSQL 15 de verdade:** tabelas, colunas, limites, `statement_timeout`, transação `READ ONLY` recusando escrita, e o aviso de privilégios (superusuário e usuário só com `SELECT`) | passam |
-| Fuzzing do guard: ~427 mil entradas em 30 s, conferindo que nada aceito tem comando proibido, `;` solto ou deixa de ser idempotente | sem falhas |
-| **Fuzzing diferencial:** toda consulta que o guard aceita roda num SQLite **gravável** (sem a segunda barreira) e o banco não pode mudar | sem falhas |
+| Fuzzing do guard: ~79 mil entradas em 30 s, conferindo que o que foi aceito não tem segunda instrução nem violação, e passa de novo pelo guard | sem falhas |
+| **Fuzzing diferencial:** ~34 mil entradas em 30 s; toda consulta que o guard aceita roda num SQLite **gravável** (sem a segunda barreira) e o banco não pode mudar | sem falhas |
+| Demo ponta a ponta com o binário real, conferindo o resultado de cada passo | passa |
 
-Total: 119 verificações, nenhuma pulada, nenhuma falha. O [CI](.github/workflows/ci.yml) repete tudo a cada push, com um PostgreSQL como serviço.
+Total: 180 verificações, nenhuma pulada, nenhuma falha. O [CI](.github/workflows/ci.yml) repete tudo a cada push, com um PostgreSQL como serviço.
 
 O fuzzing diferencial existe por causa de um achado: o fuzzing do guard sozinho só confere a coerência do próprio guard e não pegou o problema dos colchetes (veja abaixo). Comparar com o que o banco de verdade faz é o que fecha essa lacuna.
 
@@ -111,6 +113,8 @@ O fuzzing diferencial existe por causa de um achado: o fuzzing do guard sozinho 
 
 - **Prefere recusar na dúvida.** Um falso bloqueio custa uma reformulação da consulta; uma consulta de escrita que passe custa um incidente.
 - **Bancos leem o SQL de jeitos diferentes, e isso é brecha.** `E'...'` (escape do PostgreSQL), `$$...$$` e os `[colchetes]` do SQLite fazem cada banco enxergar os limites de um texto de um jeito, e um atacante poderia esconder um `DELETE` onde o guard vê só um texto. O guard recusa `E'...'` e `$$`, e conhece o dialeto para tratar os colchetes.
+- **Palavra proibida depende da posição.** `SELECT call FROM ligacoes` é uma coluna; `WITH x AS (SELECT 1) DELETE FROM t` é um comando. O guard trabalha com tokens e só libera a palavra onde um comando não pode começar (depois de `SELECT`, `,`, `.`, `AS`, `WHERE`, `ORDER BY` e afins). Na dúvida, recusa.
+- **Função é bloqueada pelo nome, com ou sem aspas.** `pg_sleep(10)`, `pg_catalog.pg_sleep(10)` e `"pg_sleep"(10)` são a mesma chamada. Uma coluna chamada `lo_total` não é chamada de função e passa.
 - **Duas barreiras, não uma.** O guard pode errar; a conexão somente leitura não depende dele.
 - **Resposta limitada em bytes, não só em linhas.** Uma célula pode ter megabytes; por isso há limite por célula e por resultado.
 - **Erro nunca vira resposta vazia.** `Inf` e `NaN` viram texto, bytes que não são UTF-8 viram base64, e o que não puder ser serializado vira erro explícito.
@@ -118,12 +122,15 @@ O fuzzing diferencial existe por causa de um achado: o fuzzing do guard sozinho 
 
 ### Revisão de segurança e o que ela achou
 
-Uma revisão do próprio código, com sondas rodando em SQLite e PostgreSQL reais, achou quatro problemas, todos corrigidos e cobertos por teste:
+Uma revisão do próprio código, com sondas rodando em SQLite e PostgreSQL reais, achou estes problemas, todos corrigidos e cobertos por teste:
 
 1. **O guard não entendia `[identificador]` do SQLite.** Um apóstrofo dentro dos colchetes escondia um `DELETE`; num banco gravável, a tabela foi de 6 para 0 linhas. A conexão somente leitura barrou o ataque, e foi essa segunda barreira que o provou necessária.
 2. **Erro de JSON engolido:** `Inf`/`NaN` davam resposta vazia como se fosse sucesso.
 3. **Sem limite de bytes:** uma consulta devolveu 40 MB de uma vez.
 4. **PostgreSQL:** `pg_reload_conf()`, `pg_stat_reset()` e `pg_notify()` rodavam num `SELECT` com um usuário privilegiado.
+5. **Função entre aspas:** `"pg_sleep"(10)` escapava da lista de funções bloqueadas, porque o guard ignorava o conteúdo das aspas. Foi isso que levou a reescrever o guard com tokens.
+
+Também foram corrigidos: colunas legítimas recusadas, caminhos de SQLite com `#`, `?` e `%`, versão de protocolo desconhecida ecoada ao cliente, `id` nulo aceito, Ctrl+C que não encerrava e uma demo que não conferia nada.
 
 ## Como foi feito
 
@@ -132,9 +139,10 @@ Uma revisão do próprio código, com sondas rodando em SQLite e PostgreSQL reai
 
 ## Limitações conhecidas
 
-- O guard analisa o texto da consulta, não a árvore SQL completa, então **recusa consultas legítimas** que usem como nome de coluna uma palavra da lista (por exemplo `call`, `begin`, `lock`, `copy`, `exec`, `reset`, `notify`). `EXPLAIN`, `VALUES` e `TABLE` também são recusados. Um parser de verdade é o próximo passo.
+- O guard analisa tokens, não a árvore SQL completa. Pode recusar uma consulta legítima em que uma palavra da lista apareça fora das posições conhecidas (por exemplo, um alias sem `AS`, como `SELECT nome call`). Também recusa `EXPLAIN` com opções. Um parser de verdade é o próximo passo.
+- A lista de funções bloqueadas é uma lista: uma função administrativa que não esteja nela passa pelo guard. Por isso a defesa principal no PostgreSQL é um usuário só com `SELECT`, e o servidor avisa quando não é o caso.
+- O fuzzing diferencial roda só contra o SQLite. No PostgreSQL, o que protege contra escrita é a transação `READ ONLY`, verificada pelos testes.
 - Não aceita `E'...'` nem `$$...$$` (ver acima).
-- **Caminho de SQLite com `#`, `?` ou `%`** não funciona: o DSN é montado sem escapar. Espaços funcionam.
 - Ainda não há controle de acesso por tabela ou coluna. Com PostgreSQL, use um usuário do banco que só tenha `SELECT` nas tabelas desejadas.
 
 ## Licença
