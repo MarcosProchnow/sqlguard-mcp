@@ -97,7 +97,7 @@ Verificado em um Codespace (saídas gravadas em [`docs/test-output.txt`](docs/te
 
 | O quê | Resultado |
 |---|---|
-| Guard de SQL: 58 casos, rodados nos dois dialetos, com os truques clássicos (comando atrás de comentário, escrita dentro de CTE ou depois dela, `SELECT ... INTO`, `FOR UPDATE`, função entre aspas, `E'...'`, `$$`, `[colchetes]` do SQLite, várias instruções) e os nomes de coluna que não podem ser bloqueados (`call`, `begin`, `lock`) | passam |
+| Guard de SQL: 62 casos, rodados nos dois dialetos, com os truques clássicos (comando atrás de comentário, escrita dentro de CTE ou depois dela, `SELECT ... INTO`, `FOR UPDATE`, função entre aspas, `E'...'`, `$$`, `[colchetes]` do SQLite, várias instruções) e os nomes de coluna que não podem ser bloqueados (`call`, `begin`, `lock`) | passam |
 | Servidor MCP ponta a ponta: initialize, negociação de versão, `id` nulo, listagem, consultas permitidas e bloqueadas, auditoria, resposta que o JSON não representa, encerramento por Ctrl+C | passam |
 | SQLite: limites de linhas e de bytes, tempo máximo, `Inf`/`NaN`, bytes que não são UTF-8, caminhos com `#`, `?`, `%` e acento, e o banco recusa escrita mesmo sem o guard | passam |
 | **PostgreSQL 15 de verdade:** tabelas, colunas, limites, `statement_timeout`, transação `READ ONLY` recusando escrita, e o aviso de privilégios (superusuário e usuário só com `SELECT`) | passam |
