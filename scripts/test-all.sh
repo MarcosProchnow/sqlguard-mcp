@@ -37,7 +37,10 @@ echo "== testes (SQLite e PostgreSQL)"
 go test -race -v ./... 2>&1 | tee docs/test-output.txt | grep -E '^(ok|FAIL|---|\?)' | grep -vE '^    ---' | tail -20
 
 echo "== fuzzing do guard (30 s)"
-go test -run '^$' -fuzz FuzzCheck -fuzztime 30s ./internal/guard 2>&1 | tee docs/fuzz-output.txt | tail -8
+go test -run '^$' -fuzz FuzzCheck -fuzztime 30s ./internal/guard 2>&1 | tee docs/fuzz-output.txt | tail -4
+
+echo "== fuzzing diferencial: guard x SQLite gravável (30 s)"
+go test -run '^$' -fuzz FuzzGuardNaoAltera -fuzztime 30s ./internal/store 2>&1 | tee -a docs/fuzz-output.txt | tail -4
 
 echo "== demonstração"
 go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp

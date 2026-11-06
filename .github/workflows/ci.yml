@@ -35,6 +35,8 @@ jobs:
         run: go test -race -v ./...
       - name: Fuzzing do guard (30 s)
         run: go test -run '^$' -fuzz FuzzCheck -fuzztime 30s ./internal/guard
+      - name: Fuzzing diferencial, guard contra SQLite gravável (30 s)
+        run: go test -run '^$' -fuzz FuzzGuardNaoAltera -fuzztime 30s ./internal/store
       - name: Demonstração ponta a ponta
         run: |
           go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp
