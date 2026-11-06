@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,5 +180,49 @@ func TestAtaqueDosColchetesBloqueado(t *testing.T) {
 	}
 	if (*log)[0].Allowed {
 		t.Error("a auditoria deveria registrar o bloqueio")
+	}
+}
+
+// Achado numa revisão: o servidor devolvia ao cliente uma versão que não conhece.
+func TestVersaoDoProtocoloNegociada(t *testing.T) {
+	s, _ := newServer(t)
+	resps := rpc(t, s,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"1999-01-01"}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"initialize","params":{}}`,
+	)
+	for i, want := range []string{"2024-11-05", "2025-06-18", "2025-06-18"} {
+		got := resps[i]["result"].(map[string]any)["protocolVersion"]
+		if got != want {
+			t.Errorf("initialize %d: versão = %v, esperado %v", i+1, got, want)
+		}
+	}
+}
+
+func TestIdNuloEhRequisicaoInvalida(t *testing.T) {
+	s, _ := newServer(t)
+	resps := rpc(t, s, `{"jsonrpc":"2.0","id":null,"method":"ping"}`)
+	errObj, ok := resps[0]["error"].(map[string]any)
+	if !ok || errObj["code"] != float64(-32600) {
+		t.Errorf("esperava erro -32600, veio %v", resps[0])
+	}
+}
+
+// Ctrl+C: o servidor precisa parar mesmo com a entrada aberta e parada.
+func TestServeEncerraQuandoOContextoCancela(t *testing.T) {
+	s, _ := newServer(t)
+	pr, pw := io.Pipe() // entrada que nunca recebe nada nem fecha
+	defer pw.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(ctx, pr, io.Discard) }()
+	cancel()
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Errorf("erro = %v, esperado context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve não encerrou depois do cancelamento")
 	}
 }

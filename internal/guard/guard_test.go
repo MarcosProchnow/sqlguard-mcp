@@ -30,6 +30,22 @@ func TestCheck(t *testing.T) {
 		{"barra invertida em texto comum é literal", `SELECT 'a\' FROM t`, true, ""},
 		{"parâmetro posicional", "SELECT * FROM t WHERE id = $1", true, ""},
 
+		// palavras da lista usadas como nome de coluna, alias ou tabela
+		{"coluna chamada call", "SELECT call, duracao FROM ligacoes", true, ""},
+		{"coluna qualificada begin", "SELECT t.begin FROM turnos t", true, ""},
+		{"coluna lock, copy, exec", "SELECT lock, copy, exec FROM portas", true, ""},
+		{"coluna reset e notify", "SELECT reset, notify FROM canais", true, ""},
+		{"alias com AS", "SELECT nome AS call FROM clientes", true, ""},
+		{"ordenar por coluna lock", "SELECT id FROM portas ORDER BY lock", true, ""},
+		{"filtrar por coluna set", "SELECT id FROM t WHERE set = 1 AND begin = 2", true, ""},
+		{"coluna que começa como função proibida", "SELECT lo_total, pg_log_nivel FROM t", true, ""},
+		{"EXPLAIN de um SELECT", "EXPLAIN SELECT * FROM clientes", true, ""},
+		{"EXPLAIN QUERY PLAN", "EXPLAIN QUERY PLAN SELECT * FROM clientes", true, ""},
+		{"VALUES", "VALUES (1), (2)", true, ""},
+		{"TABLE", "TABLE clientes", true, ""},
+		{"select entre parênteses", "(SELECT 1) UNION (SELECT 2)", true, ""},
+		{"função comum com nome parecido", "SELECT pg_size_pretty(pg_database_size(current_database()))", true, ""},
+
 		{"drop", "DROP TABLE clientes", false, "SELECT e WITH"},
 		{"delete", "DELETE FROM clientes", false, "SELECT e WITH"},
 		{"duas instruções", "SELECT 1; DROP TABLE clientes", false, "uma instrução"},
@@ -46,6 +62,19 @@ func TestCheck(t *testing.T) {
 		{"zera estatísticas", "SELECT pg_stat_reset()", false, "pg_stat_reset"},
 		{"manda notificação", "SELECT pg_notify('canal', 'x')", false, "pg_notify"},
 		{"consome sequência", "SELECT nextval('s')", false, "nextval"},
+		{"função entre aspas", `SELECT "pg_sleep"(10)`, false, "pg_sleep"},
+		{"função entre aspas com schema", `SELECT pg_catalog."pg_reload_conf"()`, false, "pg_reload_conf"},
+		{"função com schema", "SELECT pg_catalog.pg_sleep(10)", false, "pg_sleep"},
+		{"função com espaço antes do parêntese", "SELECT pg_sleep (10)", false, "pg_sleep"},
+		{"função de arquivo do SQLite entre colchetes", "SELECT [load_extension]('x')", false, "load_extension"},
+		{"comando depois do CTE", "WITH x AS (SELECT 1) DELETE FROM clientes", false, "DELETE"},
+		{"INSERT depois do CTE", "WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", false, "INSERT"},
+		{"CTE que escreve, com MATERIALIZED", "WITH x AS MATERIALIZED (UPDATE t SET a = 1 RETURNING *) SELECT * FROM x", false, "UPDATE"},
+		{"FOR NO KEY UPDATE", "SELECT * FROM t FOR NO KEY UPDATE", false, "UPDATE"},
+		{"comando entre parênteses", "(DELETE FROM clientes)", false, "SELECT e WITH"},
+		{"EXPLAIN com opções", "EXPLAIN (ANALYZE) SELECT 1", false, "EXPLAIN"},
+		{"EXPLAIN de um DELETE", "EXPLAIN DELETE FROM clientes", false, "EXPLAIN"},
+		{"INTO depois da lista", "SELECT id INTO copia FROM clientes", false, "INTO"},
 		{"texto entre $$ não é aceito", "SELECT $$;$$; DROP TABLE t", false, "não é suportado"},
 		{"texto com tag $x$ não é aceito", "SELECT $x$a$x$", false, "não é suportado"},
 		{"string E esconderia a segunda instrução", `SELECT E'\'' ; DELETE FROM t ; -- '`, false, "não é suportado"},
@@ -131,15 +160,15 @@ func TestCheckPreservaTexto(t *testing.T) {
 	}
 }
 
-// FuzzCheck confere duas propriedades para qualquer entrada que o guard aceite:
-// o que vai ao banco não tem comando proibido nem segunda instrução, e passar de
-// novo pelo guard dá o mesmo resultado.
+// FuzzCheck confere, para qualquer entrada que o guard aceite, que o que vai ao banco
+// passa de novo pelo guard com o mesmo resultado, sem segunda instrução e sem violação.
 func FuzzCheck(f *testing.F) {
 	for _, seed := range []string{
 		"SELECT 1", "SELECT 'a;b'", "WITH t AS (SELECT 1) SELECT * FROM t",
 		"SELECT 1 -- c", "/* c */ SELECT 1", "DROP TABLE x", `SELECT "a" FROM t`,
 		"SELECT 'it''s'", "SELECT 1; SELECT 2", "SELECT /* a /* b */ c */ 1",
-		"SELECT [a'] FROM t", "SELECT arr['k'] FROM t",
+		"SELECT [a'] FROM t", "SELECT arr['k'] FROM t", `SELECT "pg_sleep"(1)`,
+		"SELECT call FROM t", "EXPLAIN SELECT 1", "WITH x AS (SELECT 1) DELETE FROM t",
 	} {
 		f.Add(seed)
 	}
@@ -149,22 +178,18 @@ func FuzzCheck(f *testing.F) {
 			if !v.Allowed {
 				continue
 			}
-			scan, _, err := mask(v.SQL, dl.d)
+			toks, _, err := mask(v.SQL, dl.d)
 			if err != nil {
 				t.Fatalf("[%s] SQL aceito não passa pelo mask: %q (%v)", dl.nome, v.SQL, err)
 			}
-			scan = trimStmt(scan)
-			if strings.Contains(scan, ";") {
-				t.Fatalf("[%s] SQL aceito tem ';' fora de texto: %q", dl.nome, v.SQL)
-			}
-			words := wordRe.FindAllString(strings.ToLower(scan), -1)
-			if len(words) == 0 || (words[0] != "select" && words[0] != "with") {
-				t.Fatalf("[%s] SQL aceito não começa com SELECT/WITH: %q", dl.nome, v.SQL)
-			}
-			for _, w := range words {
-				if deniedWords[w] {
-					t.Fatalf("[%s] SQL aceito contém %q: %q", dl.nome, w, v.SQL)
+			toks = trimSemis(toks)
+			for _, tk := range toks {
+				if tk.is(tPunct, ";") {
+					t.Fatalf("[%s] SQL aceito tem ';' fora de texto: %q", dl.nome, v.SQL)
 				}
+			}
+			if reason := violation(toks); reason != "" {
+				t.Fatalf("[%s] SQL aceito tem violação (%s): %q", dl.nome, reason, v.SQL)
 			}
 			if !Check(v.SQL, dl.d).Allowed {
 				t.Fatalf("[%s] guard não é idempotente para %q", dl.nome, v.SQL)

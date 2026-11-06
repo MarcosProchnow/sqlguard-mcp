@@ -240,3 +240,43 @@ func FuzzGuardNaoAltera(f *testing.F) {
 		}
 	})
 }
+
+// Achado numa revisão: o DSN era montado por concatenação e '#', '?' e '%' quebravam o caminho.
+func TestCaminhosEspeciais(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "testdata", "loja.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, nome := range []string{"a b", "a#b", "a?b", "a%41b", "acentuação", "a&b=c"} {
+		path := filepath.Join(t.TempDir(), nome, "demo.db")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := SeedSQLite(path, string(script)); err != nil {
+			t.Errorf("%q: SeedSQLite: %v", nome, err)
+			continue
+		}
+		st, err := Open("sqlite:"+path, 5*time.Second)
+		if err != nil {
+			t.Errorf("%q: Open: %v", nome, err)
+			continue
+		}
+		res, err := st.Query(context.Background(), "SELECT COUNT(*) FROM clientes", 1)
+		st.Close()
+		if err != nil || res.Rows[0][0] != int64(6) {
+			t.Errorf("%q: consulta falhou: %v %v", nome, res, err)
+		}
+	}
+}
+
+func TestSQLiteURI(t *testing.T) {
+	for _, tc := range []struct{ in, query, want string }{
+		{"/tmp/a b/x.db", "", "file:///tmp/a%20b/x.db"},
+		{"/tmp/a#b/x.db", "mode=ro", "file:///tmp/a%23b/x.db?mode=ro"},
+		{"C:/dados/x.db", "", "file:///C:/dados/x.db"},
+	} {
+		if got := sqliteURI(tc.in, tc.query); got != tc.want {
+			t.Errorf("sqliteURI(%q) = %q, esperado %q", tc.in, got, tc.want)
+		}
+	}
+}

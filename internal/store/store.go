@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -61,11 +62,14 @@ func newStore(db *sql.DB, d Dialect, timeout time.Duration) *Store {
 func Open(dsn string, timeout time.Duration) (*Store, error) {
 	switch {
 	case strings.HasPrefix(dsn, "sqlite:"):
-		path := strings.TrimPrefix(dsn, "sqlite:")
+		path, err := filepath.Abs(strings.TrimPrefix(dsn, "sqlite:"))
+		if err != nil {
+			return nil, err
+		}
 		if _, err := os.Stat(path); err != nil {
 			return nil, fmt.Errorf("banco SQLite não encontrado: %w", err)
 		}
-		db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro&_pragma=query_only(1)")
+		db, err := sql.Open("sqlite", sqliteURI(path, "mode=ro&_pragma=query_only(1)"))
 		if err != nil {
 			return nil, err
 		}
@@ -86,13 +90,27 @@ func (s *Store) SetLimits(maxCellBytes, maxResultBytes int) {
 	s.maxCell, s.maxBytes = maxCellBytes, maxResultBytes
 }
 
+// sqliteURI monta a URI "file:" de um caminho absoluto, escapando o que tem significado
+// em URI: sem isso, um '#' ou '?' no caminho corta o nome do arquivo e '%41' vira 'A'.
+func sqliteURI(absPath, query string) string {
+	p := filepath.ToSlash(absPath)
+	if !strings.HasPrefix(p, "/") { // unidade do Windows: C:/x vira /C:/x
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p, RawQuery: query}).String()
+}
+
 // SeedSQLite cria (ou recria) um banco SQLite a partir de um script. Só serve para
 // montar a base de demonstração; o servidor nunca escreve no banco.
 func SeedSQLite(path, script string) error {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path))
+	db, err := sql.Open("sqlite", sqliteURI(path, ""))
 	if err != nil {
 		return err
 	}

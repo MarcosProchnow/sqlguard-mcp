@@ -1,5 +1,7 @@
 // Comando demo: sobe o servidor e conversa com ele como um cliente MCP faria
 // (o Claude Code, por exemplo), mostrando consultas permitidas e bloqueadas.
+// Cada passo declara o que espera, e a demo sai com erro se o servidor responder outra
+// coisa: ela serve também de teste ponta a ponta no CI.
 //
 //	go build -o bin/sqlguard-mcp ./cmd/sqlguard-mcp && go run ./cmd/demo bin/sqlguard-mcp
 package main
@@ -37,6 +39,14 @@ func (c *client) tool(name string, args map[string]any) (string, bool) {
 	return text, res["isError"].(bool)
 }
 
+type step struct {
+	titulo   string
+	tool     string
+	args     map[string]any
+	bloqueio bool   // espera que o servidor recuse
+	contem   string // trecho que a resposta precisa ter
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("uso: demo <caminho-do-sqlguard-mcp>")
@@ -66,24 +76,27 @@ func main() {
 		names = append(names, t.(map[string]any)["name"].(string))
 	}
 	fmt.Printf("== tools/list: %s\n\n", strings.Join(names, ", "))
+	falhas := 0
+	if strings.Join(names, ",") != "list_tables,describe_table,query" {
+		fmt.Println("FALHA: ferramentas inesperadas")
+		falhas++
+	}
 
-	steps := []struct {
-		titulo string
-		tool   string
-		args   map[string]any
-	}{
-		{"1. Quais tabelas existem?", "list_tables", map[string]any{}},
-		{"2. Como é a tabela pedidos?", "describe_table", map[string]any{"table": "pedidos"}},
+	steps := []step{
+		{"1. Quais tabelas existem?", "list_tables", map[string]any{}, false, `"itens_pedido"`},
+		{"2. Como é a tabela pedidos?", "describe_table", map[string]any{"table": "pedidos"}, false, `"cliente_id"`},
 		{"3. Quem mais gastou? (permitida)", "query", map[string]any{"sql": `
 			SELECT c.nome, ROUND(SUM(i.quantidade * i.preco_unit), 2) AS total
 			FROM clientes c
 			JOIN pedidos p       ON p.cliente_id = c.id AND p.status = 'pago'
 			JOIN itens_pedido i  ON i.pedido_id = p.id
-			GROUP BY c.nome ORDER BY total DESC LIMIT 3`}},
-		{"4. Tentativa: apagar uma tabela (bloqueada)", "query", map[string]any{"sql": "DROP TABLE clientes"}},
-		{"5. Tentativa: duas instruções (bloqueada)", "query", map[string]any{"sql": "SELECT 1; DELETE FROM pedidos"}},
-		{"6. Tentativa: escrever dentro de uma CTE (bloqueada)", "query", map[string]any{"sql": "WITH x AS (DELETE FROM pedidos RETURNING *) SELECT * FROM x"}},
-		{"7. Os dados continuam intactos?", "query", map[string]any{"sql": "SELECT COUNT(*) AS pedidos FROM pedidos"}},
+			GROUP BY c.nome ORDER BY total DESC LIMIT 3`}, false, `["Ana Souza",1926.6]`},
+		{"4. Tentativa: apagar uma tabela (bloqueada)", "query", map[string]any{"sql": "DROP TABLE clientes"}, true, "só SELECT e WITH"},
+		{"5. Tentativa: duas instruções (bloqueada)", "query", map[string]any{"sql": "SELECT 1; DELETE FROM pedidos"}, true, "uma instrução"},
+		{"6. Tentativa: escrever dentro de uma CTE (bloqueada)", "query", map[string]any{"sql": "WITH x AS (DELETE FROM pedidos RETURNING *) SELECT * FROM x"}, true, "DELETE"},
+		{"7. Tentativa: esconder o DELETE atrás de [colchetes] (bloqueada)", "query", map[string]any{"sql": "SELECT id AS [a'] FROM clientes WHERE id = 1 ; DELETE FROM clientes ; --'"}, true, "uma instrução"},
+		{"8. Tentativa: função entre aspas (bloqueada)", "query", map[string]any{"sql": `SELECT "load_extension"('x')`}, true, "load_extension"},
+		{"9. Os dados continuam intactos?", "query", map[string]any{"sql": "SELECT COUNT(*) AS pedidos FROM pedidos"}, false, "[[12]]"},
 	}
 	for _, s := range steps {
 		text, isErr := c.tool(s.tool, s.args)
@@ -91,17 +104,36 @@ func main() {
 		if isErr {
 			marca = "BLOQUEIO"
 		}
-		fmt.Printf("%s\n  [%s] %s\n\n", s.titulo, marca, text)
+		status := ""
+		if isErr != s.bloqueio || !strings.Contains(text, s.contem) {
+			status = fmt.Sprintf("   <-- FALHA: esperava bloqueio=%v e %q", s.bloqueio, s.contem)
+			falhas++
+		}
+		fmt.Printf("%s\n  [%s] %s%s\n\n", s.titulo, marca, text, status)
 	}
 
 	fmt.Println("== Log de auditoria (tmp/audit.jsonl)")
 	stdin.Close()
 	cmd.Wait()
-	if b, err := os.ReadFile("tmp/audit.jsonl"); err == nil {
-		for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-			var e map[string]any
-			json.Unmarshal([]byte(line), &e)
-			fmt.Printf("  %-14v permitida=%-5v linhas=%-3v %v\n", e["tool"], e["allowed"], e["rows"], e["reason"])
-		}
+	b, err := os.ReadFile("tmp/audit.jsonl")
+	if err != nil {
+		fmt.Println("FALHA: sem log de auditoria:", err)
+		os.Exit(1)
 	}
+	linhas := strings.Split(strings.TrimSpace(string(b)), "\n")
+	for _, line := range linhas {
+		var e map[string]any
+		json.Unmarshal([]byte(line), &e)
+		fmt.Printf("  %-14v permitida=%-5v linhas=%-3v %v\n", e["tool"], e["allowed"], e["rows"], e["reason"])
+	}
+	if len(linhas) != len(steps) {
+		fmt.Printf("FALHA: %d linhas de auditoria, esperava %d\n", len(linhas), len(steps))
+		falhas++
+	}
+
+	if falhas > 0 {
+		fmt.Printf("\n%d verificação(ões) da demo falharam\n", falhas)
+		os.Exit(1)
+	}
+	fmt.Println("\nTodas as verificações da demo passaram")
 }

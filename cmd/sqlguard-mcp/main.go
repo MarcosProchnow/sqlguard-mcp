@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -93,7 +94,10 @@ func run(dsn, seed, auditPath string, maxRows int, timeout time.Duration, lim li
 	defer stop()
 
 	srv := mcp.New(st, maxRows, version, func(e mcp.Entry) { enc.Encode(e) })
-	return srv.Serve(ctx, os.Stdin, os.Stdout)
+	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return nil
 }
 
 func cutPrefix(s, prefix string) (string, bool) {

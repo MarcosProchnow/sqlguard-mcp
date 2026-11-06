@@ -15,7 +15,19 @@ import (
 	"github.com/MarcosProchnow/sqlguard-mcp/internal/store"
 )
 
-const defaultProtocol = "2025-06-18"
+// Versões do protocolo MCP que este servidor entende, da mais nova para a mais antiga.
+var supportedProtocols = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
+
+// negotiate devolve a versão pedida pelo cliente se o servidor a entende; senão, a mais
+// nova que ele entende, como manda a especificação.
+func negotiate(requested string) string {
+	for _, p := range supportedProtocols {
+		if p == requested {
+			return p
+		}
+	}
+	return supportedProtocols[0]
+}
 
 // Backend é o que o servidor precisa do banco.
 type Backend interface {
@@ -77,36 +89,64 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// Serve lê uma mensagem JSON por linha de r e escreve as respostas em w, até r acabar.
+// Serve lê uma mensagem JSON por linha de r e escreve as respostas em w, até r acabar
+// ou ctx ser cancelado (Ctrl+C), o que acontecer primeiro.
 func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	// A leitura bloqueia, então roda à parte: assim o cancelamento não espera a próxima linha.
+	lines := make(chan []byte)
+	scanErr := make(chan error, 1)
+	go func() {
+		sc := bufio.NewScanner(r)
+		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for sc.Scan() {
+			line := append([]byte(nil), sc.Bytes()...)
+			select {
+			case lines <- line:
+			case <-ctx.Done():
+				return
+			}
+		}
+		scanErr <- sc.Err()
+		close(lines)
+	}()
+
 	var mu sync.Mutex
 	write := func(resp response) {
 		resp.JSONRPC = "2.0"
 		b, _ := json.Marshal(resp)
 		mu.Lock()
 		defer mu.Unlock()
-		w.Write(append(b, '\n'))
+		w.Write(append(b, '
+'))
 	}
 
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case line, ok := <-lines:
+			if !ok {
+				return <-scanErr
+			}
+			if len(line) == 0 {
+				continue
+			}
+			var req request
+			if err := json.Unmarshal(line, &req); err != nil {
+				write(response{Error: &rpcError{-32700, "JSON inválido"}})
+				continue
+			}
+			if len(req.ID) == 0 { // notificação: não tem resposta
+				continue
+			}
+			if string(req.ID) == "null" { // a especificação do MCP proíbe id nulo
+				write(response{Error: &rpcError{-32600, "requisição inválida: id não pode ser null"}})
+				continue
+			}
+			result, rerr := s.handle(ctx, req)
+			write(response{ID: req.ID, Result: result, Error: rerr})
 		}
-		var req request
-		if err := json.Unmarshal(line, &req); err != nil {
-			write(response{Error: &rpcError{-32700, "JSON inválido"}})
-			continue
-		}
-		if len(req.ID) == 0 { // notificação: não tem resposta
-			continue
-		}
-		result, rerr := s.handle(ctx, req)
-		write(response{ID: req.ID, Result: result, Error: rerr})
 	}
-	return sc.Err()
 }
 
 func (s *Server) handle(ctx context.Context, req request) (any, *rpcError) {
@@ -116,11 +156,8 @@ func (s *Server) handle(ctx context.Context, req request) (any, *rpcError) {
 			ProtocolVersion string `json:"protocolVersion"`
 		}
 		json.Unmarshal(req.Params, &p)
-		if p.ProtocolVersion == "" {
-			p.ProtocolVersion = defaultProtocol
-		}
 		return map[string]any{
-			"protocolVersion": p.ProtocolVersion,
+			"protocolVersion": negotiate(p.ProtocolVersion),
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "sqlguard-mcp", "version": s.version},
 		}, nil
