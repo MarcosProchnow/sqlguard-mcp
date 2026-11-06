@@ -66,7 +66,6 @@ func TestCheck(t *testing.T) {
 		{"função entre aspas com schema", `SELECT pg_catalog."pg_reload_conf"()`, false, "pg_reload_conf"},
 		{"função com schema", "SELECT pg_catalog.pg_sleep(10)", false, "pg_sleep"},
 		{"função com espaço antes do parêntese", "SELECT pg_sleep (10)", false, "pg_sleep"},
-		{"função de arquivo do SQLite entre colchetes", "SELECT [load_extension]('x')", false, "load_extension"},
 		{"comando depois do CTE", "WITH x AS (SELECT 1) DELETE FROM clientes", false, "DELETE"},
 		{"INSERT depois do CTE", "WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", false, "INSERT"},
 		{"CTE que escreve, com MATERIALIZED", "WITH x AS MATERIALIZED (UPDATE t SET a = 1 RETURNING *) SELECT * FROM x", false, "UPDATE"},
@@ -115,6 +114,9 @@ func TestColchetesNoSQLite(t *testing.T) {
 		if v := Check(q, SQLite); !v.Allowed {
 			t.Errorf("SQLite deveria aceitar %q: %s", q, v.Reason)
 		}
+	}
+	if v := Check("SELECT [load_extension]('x')", SQLite); v.Allowed || !strings.Contains(v.Reason, "load_extension") {
+		t.Errorf("função entre colchetes deveria ser recusada: %+v", v)
 	}
 	if v := Check("SELECT [abc FROM t", SQLite); v.Allowed || !strings.Contains(v.Reason, "não terminado") {
 		t.Errorf("colchete aberto deveria ser recusado: %+v", v)
